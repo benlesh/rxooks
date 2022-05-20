@@ -2,14 +2,14 @@
  * COPYRIGHT (s) 2022 Ben Lesh <ben@benlesh.com>
  * MIT License https://github.com/benlesh/rxooks/blob/main/LICENSE
  */
-import { DependencyList, useEffect, useRef, useState } from "react";
+import { DependencyList, useEffect, useRef, useState } from 'react';
 import {
-  from,
-  Observable,
-  ObservableInput,
-  Subscriber,
-  Unsubscribable,
-} from "rxjs";
+	from,
+	Observable,
+	ObservableInput,
+	Subscriber,
+	Unsubscribable,
+} from 'rxjs';
 
 /**
  * A hook to allow basic handling for returning an object with an unsubscribe method
@@ -17,13 +17,13 @@ import {
  * a teardown function.
  */
 export function useSubscription(
-  subscribe: () => Unsubscribable,
-  deps?: DependencyList
+	subscribe: () => Unsubscribable,
+	deps?: DependencyList
 ) {
-  useEffect(() => {
-    const subscription = subscribe();
-    return () => subscription.unsubscribe();
-  }, deps);
+	useEffect(() => {
+		const subscription = subscribe();
+		return () => subscription.unsubscribe();
+	}, deps);
 }
 
 /**
@@ -40,9 +40,9 @@ export function useSubscription(
  * @param config An optional configuration to allow configuring the initial value output to the render function
  */
 export function useAsyncValues<V>(
-  observed: () => ObservableInput<V>,
-  deps?: DependencyList | undefined,
-  config?: { initialValue: undefined }
+	observed: () => ObservableInput<V>,
+	deps?: DependencyList | undefined,
+	config?: { initialValue: undefined }
 ): V | undefined;
 
 /**
@@ -59,21 +59,24 @@ export function useAsyncValues<V>(
  * @param config An optional configuration to allow configuring the initial value output to the render function
  */
 export function useAsyncValues<V, I = V>(
-  observed: () => ObservableInput<V>,
-  deps: DependencyList | undefined,
-  config: { initialValue: I }
+	observed: () => ObservableInput<V>,
+	deps: DependencyList | undefined,
+	config: { initialValue: I }
 ): V | I;
 
 export function useAsyncValues<V, I>(
-  observed: () => ObservableInput<V>,
-  deps?: DependencyList,
-  config?: { initialValue?: I }
+	observed: () => ObservableInput<V>,
+	deps?: DependencyList,
+	config?: { initialValue?: I }
 ): V | I | undefined {
-  const [value, setValue] = useState<V | I | undefined>(config?.initialValue);
-  useSubscription(() => from(observed()).subscribe(setValue), deps);
-  return value;
+	const [value, setValue] = useState<V | I | undefined>(config?.initialValue);
+	useSubscription(() => from(observed()).subscribe(setValue), deps);
+	return value;
 }
 
+export type SetValueCallback<T> = (prev: T) => T | PromiseLike<T>;
+
+export type ValueSetter<T> = (value: T | SetValueCallback<T>) => void;
 /**
  * Basically useState that gives you an observable instead of triggering a rerender every time.
  * @returns Three things:
@@ -82,32 +85,49 @@ export function useAsyncValues<V, I>(
  * 3. A function to call to get the current value manually.
  */
 export function useObservableState<T>(
-  initialValue: T
-): [Observable<T>, (value: T) => void, () => T] {
-  const stateRef = useRef<[Observable<T>, (value: T) => void, () => T]>();
+	initialValue: T
+): [Observable<T>, ValueSetter<T>, () => T] {
+	const stateRef = useRef<[Observable<T>, ValueSetter<T>, () => T]>();
 
-  if (!stateRef.current) {
-    const subscribers = new Set<Subscriber<T>>();
+	if (!stateRef.current) {
+		const subscribers = new Set<Subscriber<T>>();
 
-    let currentValue = initialValue;
+		let currentValue = initialValue;
 
-    const setValue = (value: T) => {
-      currentValue = value;
-      for (const subscriber of subscribers) {
-        subscriber.next(value);
-      }
-    };
+		const setValue = (value: T | SetValueCallback<T>) => {
+			if (isFunction(value)) {
+				const result = value(currentValue);
+				if (isPromiseLike(result)) {
+					result.then(setValue);
+				} else {
+					setValue(result);
+				}
+			} else {
+				currentValue = value;
+				for (const subscriber of subscribers) {
+					subscriber.next(value);
+				}
+			}
+		};
 
-    const getValue = () => currentValue;
+		const getValue = () => currentValue;
 
-    const observable = new Observable<T>((subscriber) => {
-      subscriber.next(currentValue);
-      subscribers.add(subscriber);
-      return () => subscribers.delete(subscriber);
-    });
+		const observable = new Observable<T>((subscriber) => {
+			subscriber.next(currentValue);
+			subscribers.add(subscriber);
+			return () => subscribers.delete(subscriber);
+		});
 
-    stateRef.current = [observable, setValue, getValue];
-  }
+		stateRef.current = [observable, setValue, getValue];
+	}
 
-  return stateRef.current!;
+	return stateRef.current!;
+}
+
+function isPromiseLike(value: any): value is PromiseLike<any> {
+	return typeof value === 'object' && isFunction(value.then);
+}
+
+function isFunction(value: any): value is (...args: any[]) => any {
+	return typeof value === 'function';
 }
