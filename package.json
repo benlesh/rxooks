@@ -31,6 +31,8 @@
 	"files": [
 		"README.md",
 		"LICENSE",
-		"dist/index.js"
+		"dist/index.js",
+		"dist/index.d.ts",
+		"dist/index.js.map"
 	]
 }
