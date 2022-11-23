@@ -17,12 +17,12 @@ import {
  * a teardown function.
  */
 export function useSubscription(
-	subscribe: () => Unsubscribable,
+	subscribe: () => Unsubscribable | void,
 	deps?: DependencyList
 ) {
 	useEffect(() => {
 		const subscription = subscribe();
-		return () => subscription.unsubscribe();
+		return () => subscription?.unsubscribe();
 	}, deps);
 }
 
